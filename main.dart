@@ -3,6 +3,8 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
+import 'dart:io';
 
 void main() => runApp(MyApp());
 
@@ -54,11 +56,22 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       _isRecording = false;
     });
-    _sendMessage(path);
+    _sendFile(path);
   }
 
-  void _sendMessage(String path) {
-    channel.sink.add(path);
+  void _sendFile(String path) async {
+    File audioFile = File(path);
+    String fileName = path.split('/').last;
+
+    var request = http.MultipartRequest('POST', Uri.parse('http://10.0.2.2:8080/upload'));
+    request.files.add(await http.MultipartFile.fromPath('audio', audioFile.path, filename: fileName));
+    var response = await request.send();
+
+    if (response.statusCode == 200) {
+      print('File uploaded successfully');
+    } else {
+      print('File upload failed');
+    }
   }
 
   Future<void> _playMessage(String path) async {
@@ -71,9 +84,9 @@ class _MyHomePageState extends State<MyHomePage> {
       appBar: AppBar(
         title: Text('Flutter WebSocket Demo'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
+      body: Center(
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             StreamBuilder(
               stream: channel.stream,
@@ -91,12 +104,16 @@ class _MyHomePageState extends State<MyHomePage> {
               onTapDown: (_) => _startRecording(),
               onTapUp: (_) => _stopRecording(),
               child: CircleAvatar(
-                radius: 40,
-                backgroundColor: Colors.blue,
-                child: Icon(
-                  Icons.mic,
-                  color: Colors.white,
-                  size: 30,
+                radius: 100,
+                backgroundColor: Colors.green,
+                child: CircleAvatar(
+                  radius: 90,
+                  backgroundColor: Colors.black,
+                  child: Icon(
+                    Icons.mic,
+                    color: Colors.white,
+                    size: 70,
+                  ),
                 ),
               ),
             ),
