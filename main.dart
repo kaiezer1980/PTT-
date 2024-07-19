@@ -1,10 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:http/http.dart' as http;
-import 'dart:io';
+import 'dart:typed_data';
 
 void main() => runApp(MyApp());
 
@@ -30,11 +31,18 @@ class _MyHomePageState extends State<MyHomePage> {
   FlutterSoundRecorder _recorder = FlutterSoundRecorder();
   FlutterSoundPlayer _player = FlutterSoundPlayer();
   bool _isRecording = false;
+  final StreamController<Food> _controller = StreamController<Food>();
 
   @override
   void initState() {
     super.initState();
     _initializeRecorder();
+    _initializePlayer();
+    _controller.stream.listen((buffer) {
+      if (buffer is FoodData) {
+        channel.sink.add(buffer.data);
+      }
+    });
   }
 
   Future<void> _initializeRecorder() async {
@@ -42,40 +50,29 @@ class _MyHomePageState extends State<MyHomePage> {
     await _recorder.openRecorder();
   }
 
+  Future<void> _initializePlayer() async {
+    await _player.openPlayer();
+  }
+
   Future<void> _startRecording() async {
-    await _recorder.startRecorder(toFile: 'audio.aac');
+    await _recorder.startRecorder(
+      codec: Codec.pcm16,
+      toStream: _controller.sink,
+    );
     setState(() {
       _isRecording = true;
     });
   }
 
   Future<void> _stopRecording() async {
-    String? nullablePath = await _recorder.stopRecorder();
-    String path = nullablePath ?? 'defaultPath';
-
+    await _recorder.stopRecorder();
     setState(() {
       _isRecording = false;
     });
-    _sendFile(path);
   }
 
-  void _sendFile(String path) async {
-    File audioFile = File(path);
-    String fileName = path.split('/').last;
-
-    var request = http.MultipartRequest('POST', Uri.parse('http://10.0.2.2:8080/upload'));
-    request.files.add(await http.MultipartFile.fromPath('audio', audioFile.path, filename: fileName));
-    var response = await request.send();
-
-    if (response.statusCode == 200) {
-      print('File uploaded successfully');
-    } else {
-      print('File upload failed');
-    }
-  }
-
-  Future<void> _playMessage(String path) async {
-    await _player.startPlayer(fromURI: path);
+  Future<void> _playStream(Uint8List data) async {
+    await _player.startPlayer(fromDataBuffer: data, codec: Codec.pcm16);
   }
 
   @override
@@ -92,7 +89,7 @@ class _MyHomePageState extends State<MyHomePage> {
               stream: channel.stream,
               builder: (context, snapshot) {
                 if (snapshot.hasData) {
-                  _playMessage(snapshot.data);
+                  _playStream(snapshot.data);
                 }
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24.0),
@@ -128,6 +125,7 @@ class _MyHomePageState extends State<MyHomePage> {
     channel.sink.close(status.goingAway);
     _recorder.closeRecorder();
     _player.closePlayer();
+    _controller.close();
     super.dispose();
   }
 }
