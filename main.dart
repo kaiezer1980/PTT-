@@ -1,11 +1,10 @@
 import 'dart:async';
-
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:typed_data';
 
 void main() => runApp(MyApp());
 
@@ -46,33 +45,69 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> _initializeRecorder() async {
-    await Permission.microphone.request();
-    await _recorder.openRecorder();
+    var status = await Permission.microphone.request();
+    if (status != PermissionStatus.granted) {
+      print("Microphone permission not granted");
+      return;
+    }
+    try {
+      await _recorder.openRecorder();
+      print("Recorder initialized");
+    } catch (e) {
+      print("Error initializing recorder: $e");
+    }
   }
 
   Future<void> _initializePlayer() async {
-    await _player.openPlayer();
+    try {
+      await _player.openPlayer();
+      print("Player initialized");
+    } catch (e) {
+      print("Error initializing player: $e");
+    }
   }
 
   Future<void> _startRecording() async {
-    await _recorder.startRecorder(
-      codec: Codec.pcm16,
-      toStream: _controller.sink,
-    );
-    setState(() {
-      _isRecording = true;
-    });
+    try {
+      await _recorder.startRecorder(
+        codec: Codec.pcm16,
+        toStream: _controller.sink,
+      );
+      setState(() {
+        _isRecording = true;
+      });
+      print("Recording started");
+    } catch (e) {
+      print("Error starting recorder: $e");
+    }
   }
 
   Future<void> _stopRecording() async {
-    await _recorder.stopRecorder();
-    setState(() {
-      _isRecording = false;
-    });
+    if (!_isRecording) {
+      print("Recorder is not recording");
+      return;
+    }
+    try {
+      await _recorder.stopRecorder();
+      setState(() {
+        _isRecording = false;
+      });
+      print("Recording stopped");
+    } catch (e) {
+      print("Error stopping recorder: $e");
+    }
   }
 
   Future<void> _playStream(Uint8List data) async {
-    await _player.startPlayer(fromDataBuffer: data, codec: Codec.pcm16);
+    try {
+      await _player.startPlayer(
+        fromDataBuffer: data,
+        codec: Codec.pcm16,
+      );
+      print("Playing stream");
+    } catch (e) {
+      print("Error playing stream: $e");
+    }
   }
 
   @override
@@ -89,7 +124,7 @@ class _MyHomePageState extends State<MyHomePage> {
               stream: channel.stream,
               builder: (context, snapshot) {
                 if (snapshot.hasData) {
-                  _playStream(snapshot.data);
+                  _playStream(snapshot.data as Uint8List);
                 }
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24.0),
